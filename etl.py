@@ -12,14 +12,14 @@ DB_CONFIG = {
     "password": "dwh",
 }
 
-
+#E-part
 def extract(endpoint: str) -> list[dict]:
     """Забираем данные из API как есть."""
-    response = requests.get(f"{BASE_URL}/{endpoint}", timeout=10)
+    response = requests.get(f"{BASE_URL}/{endpoint}", timeout=30)
     response.raise_for_status()
     return response.json()
 
-
+#L-part
 def load_to_staging(endpoint: str, records: list[dict]) -> None:
     """Кладём сырой JSON в staging.<endpoint> без разбора полей."""
     conn = psycopg2.connect(**DB_CONFIG)
@@ -44,7 +44,7 @@ def run(endpoint: str) -> None:
     load_to_staging(endpoint, records)
     print(f"{endpoint}: загружено {len(records)} записей")
 
-
+#T-part
 def run_sql_file(path: str) -> None:
     with open(path, encoding="utf-8") as f:
         sql = f.read()
@@ -59,7 +59,11 @@ def transform() -> None:
     run_sql_file("sql/marts.sql")
     print("marts: пересобраны")
 
+
 if __name__ == "__main__":
-    for endpoint in ["users", "posts", "comments"]:
+    for endpoint in ["users", "posts"]:  # "comments" временно исключен из-за таймаутов
         run(endpoint)
+    
+    # run("comments")  # Закомментировано - API jsonplaceholder иногда падает на этом эндпоинте
+    
     transform()

@@ -34,7 +34,8 @@ SELECT DISTINCT ON (raw->>'id')
 FROM staging.posts
 ORDER BY raw->>'id', _loaded_at DESC;
 
--- Комментарии
+-- Комментарии - ВРЕМЕННО ОТКЛЮЧЕНЫ
+/*
 CREATE TABLE IF NOT EXISTS core.fct_comment (
     comment_id int PRIMARY KEY,
     post_id    int,
@@ -50,3 +51,4 @@ SELECT DISTINCT ON (raw->>'id')
     lower(raw->>'email')
 FROM staging.comments
 ORDER BY raw->>'id', _loaded_at DESC;
+*/
