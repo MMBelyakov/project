@@ -2,28 +2,29 @@ import requests
 import psycopg2
 import json
 
+# Конфигурация
 BASE_URL = "https://jsonplaceholder.typicode.com"
-
 DB_CONFIG = {
-    "host": "localhost",   # скрипт бежит на Windows, поэтому localhost (порт проброшен)
+    "host": "postgres",
     "port": 5432,
     "dbname": "dwh",
     "user": "dwh",
     "password": "dwh",
 }
+ENDPOINTS = ["users", "posts"]  # Без comments
 
-#E-part
-def extract(endpoint: str) -> list[dict]:
-    """Забираем данные из API как есть."""
+
+# ========== ETL ФУНКЦИИ ==========
+def extract(endpoint):
+    """Извлекает данные из API."""
     response = requests.get(f"{BASE_URL}/{endpoint}", timeout=30)
     response.raise_for_status()
     return response.json()
 
-#L-part
-def load_to_staging(endpoint: str, records: list[dict]) -> None:
-    """Кладём сырой JSON в staging.<endpoint> без разбора полей."""
-    conn = psycopg2.connect(**DB_CONFIG)
-    with conn, conn.cursor() as cur:
+
+def load(endpoint, data):
+    """Загружает данные в staging."""
+    with psycopg2.connect(**DB_CONFIG) as conn, conn.cursor() as cur:
         cur.execute(f"""
             CREATE SCHEMA IF NOT EXISTS staging;
             CREATE TABLE IF NOT EXISTS staging.{endpoint} (
@@ -34,36 +35,32 @@ def load_to_staging(endpoint: str, records: list[dict]) -> None:
         """)
         cur.executemany(
             f"INSERT INTO staging.{endpoint} (raw) VALUES (%s)",
-            [(json.dumps(r),) for r in records],
+            [(json.dumps(r),) for r in data]
         )
-    conn.close()
 
 
-def run(endpoint: str) -> None:
-    records = extract(endpoint)
-    load_to_staging(endpoint, records)
-    print(f"{endpoint}: загружено {len(records)} записей")
-
-#T-part
-def run_sql_file(path: str) -> None:
-    with open(path, encoding="utf-8") as f:
-        sql = f.read()
-    with psycopg2.connect(**DB_CONFIG) as conn, conn.cursor() as cur:
-        cur.execute(sql)
+def run_sql(filepath):
+    """Выполняет SQL-файл."""
+    with open(filepath, encoding="utf-8") as f:
+        with psycopg2.connect(**DB_CONFIG) as conn, conn.cursor() as cur:
+            cur.execute(f.read())
 
 
-def transform() -> None:
-    run_sql_file("sql/core.sql")
+def transform():
+    """Запускает трансформацию."""
+    run_sql("sql/core.sql")
     print("core: пересобран")
-
-    run_sql_file("sql/marts.sql")
+    run_sql("sql/marts.sql")
     print("marts: пересобраны")
 
 
+# ========== ТОЧКА ВХОДА ==========
 if __name__ == "__main__":
-    for endpoint in ["users", "posts"]:  # "comments" временно исключен из-за таймаутов
-        run(endpoint)
+    # Загрузка данных
+    for endpoint in ENDPOINTS:
+        data = extract(endpoint)
+        load(endpoint, data)
+        print(f"{endpoint}: загружено {len(data)} записей")
     
-    # run("comments")  # Закомментировано - API jsonplaceholder иногда падает на этом эндпоинте
-    
+    # Трансформация
     transform()
